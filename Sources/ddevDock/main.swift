@@ -73,10 +73,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.menu = menu
 
         refresh()
-        let timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
+        startTimer()
+
+        // No one sees the count while the screen is off, and a locked Mac can
+        // stay awake for hours -- stop polling. On wake, give Docker a few
+        // seconds to come back before the first poll, so a half-started
+        // container does not trigger a false "unhealthy" notification.
+        let center = NSWorkspace.shared.notificationCenter
+        center.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.timer?.invalidate()
+        }
+        center.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                self?.refresh()
+                self?.startTimer()
+            }
+        }
+    }
+
+    var timer: Timer?
+
+    func startTimer() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
             self?.refresh()
         }
-        timer.tolerance = refreshInterval / 3 // lets the system coalesce wake-ups
+        timer?.tolerance = refreshInterval / 3 // lets the system coalesce wake-ups
     }
 
     // Runs `ddev list -j` off the main thread and stores the result.

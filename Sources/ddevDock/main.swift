@@ -235,6 +235,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             if !archive.isEmpty {
                 menu.addItem(NSMenuItem.separator())
                 let archiveItem = NSMenuItem(title: "Archived", action: nil, keyEquivalent: "")
+                archiveItem.image = symbol("archivebox")
                 let archiveMenu = NSMenu()
                 archiveMenu.autoenablesItems = false
                 for p in archive { archiveMenu.addItem(buildProjectItem(p, isFavorite: false, isArchived: true)) }

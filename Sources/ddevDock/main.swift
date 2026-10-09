@@ -46,7 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     // Adjust if your ddev binary lives elsewhere (`which ddev` in Terminal to check).
     let extraPathDirs = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
 
-    // Set in Settings…; must be an app with a `do script` AppleScript command.
+    // Set in Settings…; Terminal or iTerm, see openInTerminal().
     var terminalAppName: String {
         let v = UserDefaults.standard.string(forKey: "terminalApp") ?? ""
         return v.isEmpty ? "Terminal" : v
@@ -445,8 +445,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
                 f.bind(.value, to: NSUserDefaultsController.shared, withKeyPath: "values.\(key)")
                 return f
             }
+            // Only terminals openInTerminal() can script, and only if installed.
+            let terminals = ["Terminal", "iTerm"].filter { name in
+                ["/System/Applications/Utilities", "/Applications"]
+                    .contains { FileManager.default.fileExists(atPath: "\($0)/\(name).app") }
+            }
+            let terminalPopup = NSPopUpButton()
+            terminalPopup.addItems(withTitles: terminals)
+            terminalPopup.widthAnchor.constraint(equalToConstant: 180).isActive = true
+            terminalPopup.bind(.selectedValue, to: NSUserDefaultsController.shared, withKeyPath: "values.terminalApp")
+
             let grid = NSGridView(views: [
-                [NSTextField(labelWithString: "Terminal app:"), field("terminalApp", placeholder: "Terminal")],
+                [NSTextField(labelWithString: "Terminal app:"), terminalPopup],
                 [NSTextField(labelWithString: "Refresh every (s):"), field("refreshInterval", placeholder: "30")],
             ])
             grid.column(at: 0).xPlacement = .trailing
@@ -552,10 +562,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         // `activate` fronts the terminal window; `do script` alone does not, and
         // NSWorkspace.launchApplication is deprecated since macOS 11.
         let appLiteral = appleScriptQuote(terminalAppName)
-        let script = """
+        let commandLiteral = appleScriptQuote(command)
+        // iTerm has its own dictionary: no `do script`, a window must be created first.
+        let script = terminalAppName == "iTerm" ? """
         tell application \(appLiteral)
             activate
-            do script \(appleScriptQuote(command))
+            create window with default profile
+            tell current session of current window to write text \(commandLiteral)
+        end tell
+        """ : """
+        tell application \(appLiteral)
+            activate
+            do script \(commandLiteral)
         end tell
         """
         // osascript blocks while the Automation permission dialog is up, and a

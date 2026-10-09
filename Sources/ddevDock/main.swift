@@ -432,27 +432,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if task.terminationStatus == 127 {
             return ([], "ddev not found (check PATH)")
         }
+        let records = jsonLines(from: data)
         if task.terminationStatus != 0 {
-            let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["msg"] as? String
+            let msg = records.last { $0["level"] as? String == "fatal" || $0["level"] as? String == "error" }?["msg"] as? String
             let firstLine = msg?.split(separator: "\n").first.map(String.init)
             return ([], firstLine ?? "ddev list failed (exit \(task.terminationStatus))")
         }
-        return (parseProjects(from: data), nil)
+        return (parseProjects(from: records), nil)
     }
 
-    // NOT verified against a live `ddev list -j`. Handles the shapes seen across
-    // ddev versions: a {"raw": [...]} wrapper and a bare array. Run `ddev list -j`
-    // in Terminal and compare the keys before relying on this.
-    func parseProjects(from data: Data) -> [DDEVProject] {
-        guard let json = try? JSONSerialization.jsonObject(with: data) else { return [] }
-
-        var rawList: [[String: Any]] = []
-        if let topDict = json as? [String: Any],
-           let raw = topDict["raw"] as? [[String: Any]] {
-            rawList = raw
-        } else if let topArray = json as? [[String: Any]] {
-            rawList = topArray
+    // With -j, ddev writes one JSON object per line: warnings (e.g. an update
+    // notice) come before the {"level":"info","raw":[...]} line that holds the
+    // project list. Parsing stdout as a single object breaks on the first warning.
+    func jsonLines(from data: Data) -> [[String: Any]] {
+        let text = String(data: data, encoding: .utf8) ?? ""
+        return text.split(separator: "\n").compactMap { line in
+            try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any]
         }
+    }
+
+    // Verified against ddev v1.25.4: the project list lives in the `raw` key.
+    func parseProjects(from records: [[String: Any]]) -> [DDEVProject] {
+        let rawList = records.compactMap { $0["raw"] as? [[String: Any]] }.first ?? []
 
         return rawList.compactMap { dict in
             guard let name = dict["name"] as? String else { return nil }

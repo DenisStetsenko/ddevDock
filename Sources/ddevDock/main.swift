@@ -23,6 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusItem: NSStatusItem!
     let favoritesKey = "ddevFavorites"
 
+    // Project name (or "*" for poweroff) -> verb while a ddev command runs.
+    var busy: [String: String] = [:]
+
     // PATH fix: GUI apps on macOS do not inherit the shell's PATH.
     // Adjust if your ddev binary lives elsewhere (`which ddev` in Terminal to check).
     let extraPathDirs = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
@@ -96,8 +99,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(NSMenuItem.separator())
 
         // FIX 3: explicit target, not responder-chain dispatch.
-        let stopAllItem = NSMenuItem(title: "Stop All", action: #selector(stopAll), keyEquivalent: "")
+        let stopAllItem = NSMenuItem(title: busy["*"] == nil ? "Stop All" : "Stopping all\u{2026}",
+                                     action: #selector(stopAll), keyEquivalent: "")
         stopAllItem.target = self
+        stopAllItem.isEnabled = busy["*"] == nil
         menu.addItem(stopAllItem)
 
         menu.addItem(NSMenuItem.separator())
@@ -158,6 +163,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let item = NSMenuItem(title: p.name, action: nil, keyEquivalent: "")
         item.attributedTitle = projectTitle(p)
         item.isEnabled = true
+
+        if let verb = busy[p.name] ?? busy["*"] {
+            item.title = "\(p.name) \u{2014} \(verb)\u{2026}"
+            item.attributedTitle = nil
+            item.isEnabled = false
+            return item
+        }
 
         let submenu = NSMenu()
         submenu.autoenablesItems = false // FIX 2, submenus need it too
@@ -221,13 +233,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func toggleProject(_ sender: NSMenuItem) {
         guard let p = sender.representedObject as? DDEVProject else { return }
-        let cmd = statusKind(p.status) == .running ? "stop" : "start"
-        runDDEVAsync([cmd, p.name])
+        let running = statusKind(p.status) == .running
+        runDDEVAsync([running ? "stop" : "start", p.name],
+                     busyKey: p.name, verb: running ? "Stopping" : "Starting")
     }
 
     @objc func restartProject(_ sender: NSMenuItem) {
         guard let p = sender.representedObject as? DDEVProject else { return }
-        runDDEVAsync(["restart", p.name])
+        runDDEVAsync(["restart", p.name], busyKey: p.name, verb: "Restarting")
     }
 
     @objc func revealInFinder(_ sender: NSMenuItem) {
@@ -262,7 +275,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func stopAll() {
-        runDDEVAsync(["poweroff"])
+        runDDEVAsync(["poweroff"], busyKey: "*", verb: "Stopping all")
     }
 
     @objc func quit() {
@@ -293,18 +306,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return env
     }
 
-    // Fire-and-forget for start/stop/poweroff -- these take seconds,
+    // Runs start/stop/restart/poweroff in the background -- these take seconds,
     // running them synchronously would freeze the menu bar item.
-    func runDDEVAsync(_ args: [String]) {
+    // `busyKey` marks the project (or "*" for all) as in progress until exit;
+    // a non-zero exit shows the captured output in an alert.
+    func runDDEVAsync(_ args: [String], busyKey: String, verb: String) {
+        busy[busyKey] = verb
         DispatchQueue.global(qos: .userInitiated).async {
             let task = Process()
             task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
             task.arguments = ["ddev"] + args
             task.environment = self.makeEnvironment()
-            task.standardOutput = FileHandle.nullDevice
-            task.standardError = FileHandle.nullDevice
+            let pipe = Pipe()
+            task.standardOutput = pipe
+            task.standardError = pipe
             try? task.run()
+            let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
             task.waitUntilExit()
+            let status = task.terminationStatus
+
+            DispatchQueue.main.async {
+                self.busy[busyKey] = nil
+                guard status != 0 else { return }
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = "ddev \(args.joined(separator: " ")) failed (exit \(status))"
+                alert.informativeText = output.split(separator: "\n").suffix(15).joined(separator: "\n")
+                NSApp.activate(ignoringOtherApps: true)
+                alert.runModal()
+            }
         }
     }
 

@@ -370,10 +370,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let pipe = Pipe()
             task.standardOutput = pipe
             task.standardError = pipe
-            try? task.run()
-            let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            task.waitUntilExit()
-            let status = task.terminationStatus
+            var output = ""
+            var status: Int32 = 127
+            do {
+                try task.run()
+                // Read before waiting; a swallowed run() failure here would leave
+                // the pipe open and this read blocked forever, with the project
+                // stuck in "Starting…".
+                output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                task.waitUntilExit()
+                status = task.terminationStatus
+            } catch {
+                output = error.localizedDescription
+            }
 
             DispatchQueue.main.async {
                 self.busy[busyKey] = nil

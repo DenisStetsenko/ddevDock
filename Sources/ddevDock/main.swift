@@ -7,6 +7,7 @@ struct DDEVProject {
     let status: String       // expected: "running" / "stopped", not verified against a live ddev instance
     let approot: String      // project directory, used for `cd <approot> && ddev launch`
     let primaryURL: String?
+    let mailpitURL: String?
 }
 
 // MARK: - App
@@ -161,6 +162,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         urlItem.isEnabled = running && (!p.approot.isEmpty || p.primaryURL != nil)
         submenu.addItem(urlItem)
 
+        let mailpitItem = NSMenuItem(title: "Mailpit", action: #selector(openMailpit(_:)), keyEquivalent: "")
+        mailpitItem.representedObject = p
+        mailpitItem.target = self
+        mailpitItem.isEnabled = running && p.mailpitURL != nil
+        submenu.addItem(mailpitItem)
+
         submenu.addItem(NSMenuItem.separator())
 
         let isFav = favorites.contains(p.name)
@@ -206,6 +213,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let urlString = p.primaryURL, let url = URL(string: urlString) {
             NSWorkspace.shared.open(url)
         }
+    }
+
+    @objc func openMailpit(_ sender: NSMenuItem) {
+        guard let p = sender.representedObject as? DDEVProject,
+              let urlString = p.mailpitURL, let url = URL(string: urlString) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     @objc func toggleFavorite(_ sender: NSMenuItem) {
@@ -336,7 +349,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let url = (dict["primary_url"] as? String)
                 ?? (dict["httpsurl"] as? String)
                 ?? (dict["httpurl"] as? String)
-            return DDEVProject(name: name, status: status, approot: approot, primaryURL: url)
+            let mailpit = (dict["mailpit_https_url"] as? String)
+                ?? (dict["mailpit_url"] as? String)
+            return DDEVProject(name: name, status: status, approot: approot, primaryURL: url, mailpitURL: mailpit)
         }
     }
 }

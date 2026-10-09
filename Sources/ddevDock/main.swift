@@ -138,9 +138,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(NSMenuItem.separator())
 
         // Only meaningful from an .app bundle (make app); from `swift run` register() fails.
-        let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+        // .requiresApproval: the user blocked it in System Settings > Login Items;
+        // clicking again does nothing, so say where to fix it.
+        let loginStatus = SMAppService.mainApp.status
+        let loginTitle = loginStatus == .requiresApproval
+            ? "Launch at Login (approve in System Settings)" : "Launch at Login"
+        let loginItem = NSMenuItem(title: loginTitle, action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
         loginItem.target = self
-        loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        loginItem.state = loginStatus == .enabled ? .on : .off
         menu.addItem(loginItem)
 
         let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")

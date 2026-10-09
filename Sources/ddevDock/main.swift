@@ -358,19 +358,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         restartItem.isEnabled = running
         submenu.addItem(restartItem)
 
-        let sshItem = NSMenuItem(title: "SSH", action: #selector(sshProject(_:)), keyEquivalent: "")
-        sshItem.image = symbol("terminal")
-        sshItem.representedObject = p
-        sshItem.target = self
-        sshItem.isEnabled = running
-        submenu.addItem(sshItem)
-
         let urlItem = NSMenuItem(title: "Open URL", action: #selector(openProjectURL(_:)), keyEquivalent: "")
         urlItem.image = symbol("safari")
         urlItem.representedObject = p
         urlItem.target = self
         urlItem.isEnabled = running && p.primaryURL != nil
         submenu.addItem(urlItem)
+
+        let sshItem = NSMenuItem(title: "SSH", action: #selector(sshProject(_:)), keyEquivalent: "")
+        sshItem.image = symbol("terminal")
+        sshItem.representedObject = p
+        sshItem.target = self
+        sshItem.isEnabled = running
+        submenu.addItem(sshItem)
 
         let mailpitItem = NSMenuItem(title: "Mailpit", action: #selector(openMailpit(_:)), keyEquivalent: "")
         mailpitItem.image = symbol("envelope")

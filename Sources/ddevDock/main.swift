@@ -359,6 +359,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Skip an empty PATH: a trailing ":" would put the current directory on it.
         let current = (env["PATH"] ?? "").split(separator: ":").map(String.init)
         env["PATH"] = (extraPathDirs + current).joined(separator: ":")
+        // Every `ddev list` poll would otherwise log an Amplitude event
+        // (~8600 a day at 10 s) and flush them over the network in batches.
+        env["DDEV_NO_INSTRUMENTATION"] = "true"
         return env
     }
 

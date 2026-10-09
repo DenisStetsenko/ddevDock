@@ -5,7 +5,7 @@ import Cocoa
 struct DDEVProject {
     let name: String
     let status: String       // expected: "running" / "stopped", not verified against a live ddev instance
-    let approot: String      // project directory, used for `cd <approot> && ddev launch`
+    let approot: String      // project directory
     let primaryURL: String?
     let mailpitURL: String?
 }
@@ -159,7 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let urlItem = NSMenuItem(title: "Open URL", action: #selector(openProjectURL(_:)), keyEquivalent: "")
         urlItem.representedObject = p
         urlItem.target = self
-        urlItem.isEnabled = running && (!p.approot.isEmpty || p.primaryURL != nil)
+        urlItem.isEnabled = running && p.primaryURL != nil
         submenu.addItem(urlItem)
 
         let mailpitItem = NSMenuItem(title: "Mailpit", action: #selector(openMailpit(_:)), keyEquivalent: "")
@@ -200,19 +200,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         openInTerminal(command: "ddev ssh \(shellQuote(p.name))")
     }
 
-    // Prefers `ddev launch` (documented: opens a web browser showing the project),
-    // which avoids depending on the primary_url key in `ddev list -j`.
-    // Falls back to the parsed URL if approot is missing.
     @objc func openProjectURL(_ sender: NSMenuItem) {
-        guard let p = sender.representedObject as? DDEVProject else { return }
-
-        if !p.approot.isEmpty {
-            runShellAsync("cd \(shellQuote(p.approot)) && ddev launch")
-            return
-        }
-        if let urlString = p.primaryURL, let url = URL(string: urlString) {
-            NSWorkspace.shared.open(url)
-        }
+        guard let p = sender.representedObject as? DDEVProject,
+              let urlString = p.primaryURL, let url = URL(string: urlString) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     @objc func openMailpit(_ sender: NSMenuItem) {
@@ -267,20 +258,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let task = Process()
             task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
             task.arguments = ["ddev"] + args
-            task.environment = self.makeEnvironment()
-            task.standardOutput = FileHandle.nullDevice
-            task.standardError = FileHandle.nullDevice
-            try? task.run()
-            task.waitUntilExit()
-        }
-    }
-
-    // Runs a shell command line (needed when the command requires a `cd` first).
-    func runShellAsync(_ commandLine: String) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            let task = Process()
-            task.executableURL = URL(fileURLWithPath: "/bin/sh")
-            task.arguments = ["-c", commandLine]
             task.environment = self.makeEnvironment()
             task.standardOutput = FileHandle.nullDevice
             task.standardError = FileHandle.nullDevice

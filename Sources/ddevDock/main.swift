@@ -351,8 +351,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func makeEnvironment() -> [String: String] {
         var env = ProcessInfo.processInfo.environment
-        let currentPath = env["PATH"] ?? ""
-        env["PATH"] = (extraPathDirs + [currentPath]).joined(separator: ":")
+        // Skip an empty PATH: a trailing ":" would put the current directory on it.
+        let current = (env["PATH"] ?? "").split(separator: ":").map(String.init)
+        env["PATH"] = (extraPathDirs + current).joined(separator: ":")
         return env
     }
 

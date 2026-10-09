@@ -8,7 +8,8 @@ Single Swift file, AppKit only, no dependencies. macOS 15 or later.
 
 - Project list with a colored status dot: green running, gray stopped, red unhealthy or misconfigured.
 - Running-project count next to the menu bar icon.
-- Per project: Start / Stop, Restart, SSH (opens your terminal), Open URL, Mailpit, Open in Finder, Favorites.
+- Per project: Start / Stop, Restart, SSH (opens your terminal), Open URL, Mailpit, Open in Finder, Favorites, Archive.
+- Favorites are pinned to the top; archived projects move into an `Archived` submenu so the main list stays short.
 - Stop All (`ddev poweroff`).
 - Live menu: statuses update while the menu is open.
 - Notification when a running project becomes unhealthy.

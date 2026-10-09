@@ -1,4 +1,5 @@
 import Cocoa
+import ServiceManagement
 
 // MARK: - Data model
 
@@ -38,7 +39,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // Adjust if your ddev binary lives elsewhere (`which ddev` in Terminal to check).
     let extraPathDirs = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
 
-    // Override: `defaults write ddevDock terminalApp iTerm`
+    // Override: `defaults write com.denstetsenko.ddevDock terminalApp iTerm`
+    // (domain is `ddevDock` when run via `swift run` instead of the .app)
     var terminalAppName: String {
         UserDefaults.standard.string(forKey: "terminalApp") ?? "Terminal"
     }
@@ -134,6 +136,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(stopAllItem)
 
         menu.addItem(NSMenuItem.separator())
+
+        // Only meaningful from an .app bundle (make app); from `swift run` register() fails.
+        let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+        loginItem.target = self
+        loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        menu.addItem(loginItem)
 
         let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
@@ -304,6 +312,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func stopAll() {
         runDDEVAsync(["poweroff"], busyKey: "*", verb: "Stopping all")
+    }
+
+    @objc func toggleLaunchAtLogin() {
+        do {
+            if SMAppService.mainApp.status == .enabled {
+                try SMAppService.mainApp.unregister()
+            } else {
+                try SMAppService.mainApp.register()
+            }
+        } catch {
+            let alert = NSAlert(error: error)
+            NSApp.activate(ignoringOtherApps: true)
+            alert.runModal()
+        }
     }
 
     @objc func quit() {

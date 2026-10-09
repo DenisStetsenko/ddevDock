@@ -1,5 +1,10 @@
 # ddevDock
 
+[![CI](https://github.com/DenisStetsenko/ddevDock/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/DenisStetsenko/ddevDock/actions/workflows/ci.yaml?query=branch:main)
+[![Release](https://img.shields.io/github/v/release/DenisStetsenko/ddevDock)](https://github.com/DenisStetsenko/ddevDock/releases)
+[![macOS 15+](https://img.shields.io/badge/macOS-15%2B-blue)](#install)
+[![License](https://img.shields.io/github/license/DenisStetsenko/ddevDock)](LICENSE)
+
 A tiny macOS menu bar app for [DDEV](https://ddev.com). It shows your projects, how many are running, and lets you start, stop, SSH into or open them without leaving the menu bar.
 
 Single Swift file, AppKit only, no dependencies. macOS 15 or later.

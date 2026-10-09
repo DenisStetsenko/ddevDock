@@ -4,7 +4,7 @@ import Cocoa
 
 struct DDEVProject {
     let name: String
-    let status: String       // expected: "running" / "stopped", not verified against a live ddev instance
+    let status: String       // ddev state: running / stopped / paused / starting / unhealthy / dir missing / config missing
     let approot: String      // project directory
     let primaryURL: String?
     let mailpitURL: String?
@@ -108,9 +108,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         switch status.lowercased() {
         case "running":
             return .running
-        case "stopped", "paused", "not found", "unlisted":
+        case "stopped", "paused", "starting":
             return .idle
         default:
+            // ddev's remaining states: "unhealthy", "dir missing", "config missing".
             return .problem
         }
     }

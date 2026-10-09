@@ -344,7 +344,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         mailpitItem.isEnabled = running && p.mailpitURL != nil
         submenu.addItem(mailpitItem)
 
-        let finderItem = NSMenuItem(title: "Reveal in Finder", action: #selector(revealInFinder(_:)), keyEquivalent: "")
+        let finderItem = NSMenuItem(title: "Open in Finder", action: #selector(revealInFinder(_:)), keyEquivalent: "")
         finderItem.representedObject = p
         finderItem.target = self
         finderItem.isEnabled = !p.approot.isEmpty
@@ -382,7 +382,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
     @objc func revealInFinder(_ sender: NSMenuItem) {
         guard let p = sender.representedObject as? DDEVProject, !p.approot.isEmpty else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: p.approot)])
+        NSWorkspace.shared.open(URL(fileURLWithPath: p.approot)) // opens the folder itself, not its parent
     }
 
     // `-s` is the SERVICE flag (web/db), not the project. The project is a

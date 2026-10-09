@@ -26,6 +26,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // Project name (or "*" for poweroff) -> verb while a ddev command runs.
     var busy: [String: String] = [:]
 
+    // Cached `ddev list -j` result; the menu is built from this, never from
+    // a live call. Refreshed by a timer, after commands, and on menu open.
+    var projects: [DDEVProject] = []
+    var fetchError: String?
+    var loaded = false
+    var refreshing = false
+    let refreshInterval: TimeInterval = 10
+
     // PATH fix: GUI apps on macOS do not inherit the shell's PATH.
     // Adjust if your ddev binary lives elsewhere (`which ddev` in Terminal to check).
     let extraPathDirs = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
@@ -58,23 +66,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // FIX 2: AppKit overrides manual isEnabled while autoenablesItems is true.
         menu.autoenablesItems = false
         statusItem.menu = menu
+
+        refresh()
+        Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
+            self?.refresh()
+        }
     }
 
-    // Rebuilds the menu every time it is opened. Only refresh point -- no timer,
-    // no background polling. Note: this blocks the UI for the duration of
-    // `ddev list -j` (typically well under a second).
+    // Runs `ddev list -j` off the main thread and stores the result.
+    // Skips if a fetch is already in flight.
+    func refresh() {
+        guard !refreshing else { return }
+        refreshing = true
+        DispatchQueue.global(qos: .utility).async {
+            let (projects, error) = self.fetchProjects()
+            DispatchQueue.main.async {
+                self.projects = projects
+                self.fetchError = error
+                self.loaded = true
+                self.refreshing = false
+                let runningCount = projects.filter { self.statusKind($0.status) == .running }.count
+                self.statusItem.button?.title = runningCount > 0 ? " \(runningCount)" : ""
+            }
+        }
+    }
+
+    // Rebuilds the menu from the cache every time it is opened, and kicks a
+    // background refresh so the next open is fresher.
     func menuWillOpen(_ menu: NSMenu) {
         menu.removeAllItems()
+        refresh()
 
-        let (projects, error) = fetchProjects()
-
-        // Running count next to the icon. Refreshes only when the menu opens
-        // until background polling lands.
-        let runningCount = projects.filter { statusKind($0.status) == .running }.count
-        statusItem.button?.title = runningCount > 0 ? " \(runningCount)" : ""
-
-        if let error = error {
+        if let error = fetchError {
             let item = NSMenuItem(title: error, action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            menu.addItem(item)
+        } else if !loaded {
+            let item = NSMenuItem(title: "Loading\u{2026}", action: nil, keyEquivalent: "")
             item.isEnabled = false
             menu.addItem(item)
         } else if projects.isEmpty {
@@ -327,6 +355,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
             DispatchQueue.main.async {
                 self.busy[busyKey] = nil
+                self.refresh()
                 guard status != 0 else { return }
                 let alert = NSAlert()
                 alert.alertStyle = .warning
@@ -354,7 +383,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         try? task.run()
     }
 
-    // Synchronous on purpose: menuWillOpen needs the result before the menu displays.
+    // Blocking; always called from refresh() on a background queue.
     // Returns projects, or an error line for the menu. With -j, ddev reports
     // failures (e.g. Docker not running) as {"level":"fatal","msg":...} on
     // stdout with a non-zero exit; a missing binary makes env exit 127.

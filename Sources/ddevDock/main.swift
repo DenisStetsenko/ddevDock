@@ -33,7 +33,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var fetchError: String?
     var loaded = false
     var refreshing = false
-    let refreshInterval: TimeInterval = 10
+    // `ddev list -j` costs ~1.3 s wall / 0.7 s CPU with 20 projects, so the
+    // timer only keeps the menu bar count fresh; opening the menu and running
+    // a command refresh immediately anyway.
+    let refreshInterval: TimeInterval = 30
 
     // PATH fix: GUI apps on macOS do not inherit the shell's PATH.
     // Adjust if your ddev binary lives elsewhere (`which ddev` in Terminal to check).
@@ -70,9 +73,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.menu = menu
 
         refresh()
-        Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
+        let timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
             self?.refresh()
         }
+        timer.tolerance = refreshInterval / 3 // lets the system coalesce wake-ups
     }
 
     // Runs `ddev list -j` off the main thread and stores the result.

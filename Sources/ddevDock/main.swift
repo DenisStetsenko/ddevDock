@@ -116,6 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item.isEnabled = false
             menu.addItem(item)
         } else {
+            let favorites = self.favorites // one UserDefaults read per menu open
             let favs = projects.filter { favorites.contains($0.name) }
             let others = projects.filter { !favorites.contains($0.name) }
 
@@ -123,11 +124,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let header = NSMenuItem(title: "Favorites", action: nil, keyEquivalent: "")
                 header.isEnabled = false
                 menu.addItem(header)
-                for p in favs { menu.addItem(buildProjectItem(p)) }
+                for p in favs { menu.addItem(buildProjectItem(p, isFavorite: true)) }
                 menu.addItem(NSMenuItem.separator())
             }
 
-            for p in others { menu.addItem(buildProjectItem(p)) }
+            for p in others { menu.addItem(buildProjectItem(p, isFavorite: false)) }
         }
 
         menu.addItem(NSMenuItem.separator())
@@ -204,7 +205,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return title
     }
 
-    func buildProjectItem(_ p: DDEVProject) -> NSMenuItem {
+    func buildProjectItem(_ p: DDEVProject, isFavorite isFav: Bool) -> NSMenuItem {
         let item = NSMenuItem(title: p.name, action: nil, keyEquivalent: "")
         item.attributedTitle = projectTitle(p)
         item.isEnabled = true
@@ -259,7 +260,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         submenu.addItem(NSMenuItem.separator())
 
-        let isFav = favorites.contains(p.name)
         let favItem = NSMenuItem(
             title: isFav ? "Remove from Favorites" : "Add to Favorites",
             action: #selector(toggleFavorite(_:)),

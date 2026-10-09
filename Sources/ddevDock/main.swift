@@ -332,7 +332,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         } catch {
             let alert = NSAlert(error: error)
-            NSApp.activate(ignoringOtherApps: true)
+            NSApp.activate()
             alert.runModal()
         }
     }
@@ -405,7 +405,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 alert.alertStyle = .warning
                 alert.messageText = "ddev \(args.joined(separator: " ")) failed (exit \(status))"
                 alert.informativeText = output.split(separator: "\n").suffix(15).joined(separator: "\n")
-                NSApp.activate(ignoringOtherApps: true)
+                NSApp.activate()
                 alert.runModal()
             }
         }
@@ -439,7 +439,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 alert.alertStyle = .warning
                 alert.messageText = "Could not open \(self.terminalAppName)"
                 alert.informativeText = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                NSApp.activate(ignoringOtherApps: true)
+                NSApp.activate()
                 alert.runModal()
             }
         }

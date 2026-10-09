@@ -123,12 +123,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             let (projects, error) = self.fetchProjects()
             DispatchQueue.main.async {
                 self.notifyIfBroken(old: self.projects, new: projects)
+                let changed = !self.loaded || error != self.fetchError
+                    || projects.map { $0.name + $0.status } != self.projects.map { $0.name + $0.status }
                 self.projects = projects
                 self.fetchError = error
                 self.loaded = true
                 self.refreshing = false
                 let runningCount = projects.filter { self.statusKind($0.status) == .running }.count
                 self.statusItem.button?.title = runningCount > 0 ? " \(runningCount)" : ""
+                if changed && self.menuIsOpen { self.rebuildMenu() }
             }
         }
     }
@@ -157,10 +160,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     }
 
     // Rebuilds the menu from the cache every time it is opened, and kicks a
-    // background refresh so the next open is fresher.
+    // background refresh. While the menu stays open, refresh() calls
+    // rebuildMenu() again whenever a status changes, so "Starting…" turns into
+    // a green dot without closing and reopening.
+    var menuIsOpen = false
+
     func menuWillOpen(_ menu: NSMenu) {
-        menu.removeAllItems()
+        menuIsOpen = true
         refresh()
+        rebuildMenu()
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        menuIsOpen = false
+    }
+
+    func rebuildMenu() {
+        guard let menu = statusItem.menu else { return }
+        // Replacing items collapses an open submenu, so this is only called when
+        // something actually changed.
+        menu.removeAllItems()
 
         if let error = fetchError {
             let item = NSMenuItem(title: error, action: nil, keyEquivalent: "")
@@ -509,6 +528,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
             DispatchQueue.main.async {
                 self.busy[busyKey] = nil
+                if self.menuIsOpen { self.rebuildMenu() } // drop the "…" label even if the status did not change
                 self.refresh()
                 guard status != 0 else { return }
                 let alert = NSAlert()

@@ -414,10 +414,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             do script \(appleScriptQuote(command))
         end tell
         """
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        task.arguments = ["-e", script]
-        try? task.run()
+        // osascript blocks while the Automation permission dialog is up, and a
+        // denied permission or missing app only shows up on stderr -- so run it
+        // in the background and surface a non-zero exit.
+        DispatchQueue.global(qos: .userInitiated).async {
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+            task.arguments = ["-e", script]
+            let pipe = Pipe()
+            task.standardError = pipe
+            do { try task.run() } catch { return } // /usr/bin/osascript is always present
+            let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            task.waitUntilExit()
+            guard task.terminationStatus != 0 else { return }
+            DispatchQueue.main.async {
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = "Could not open \(self.terminalAppName)"
+                alert.informativeText = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                NSApp.activate(ignoringOtherApps: true)
+                alert.runModal()
+            }
+        }
     }
 
     // Blocking; always called from refresh() on a background queue.

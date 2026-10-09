@@ -1,5 +1,6 @@
 import Cocoa
 import ServiceManagement
+import UserNotifications
 
 // MARK: - Data model
 
@@ -19,7 +20,7 @@ app.delegate = delegate
 app.setActivationPolicy(.accessory) // no Dock icon, no app switcher entry
 app.run()
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotificationCenterDelegate {
 
     var statusItem: NSStatusItem!
     let favoritesKey = "ddevFavorites"
@@ -53,7 +54,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         set { UserDefaults.standard.set(Array(newValue), forKey: favoritesKey) }
     }
 
+    // UNUserNotificationCenter needs a bundle identifier; from `swift run` there is
+    // none and the first call crashes.
+    var canNotify: Bool { Bundle.main.bundleIdentifier != nil }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if canNotify {
+            UNUserNotificationCenter.current().delegate = self
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        }
+
         // FIX 4: variableLength, not squareLength -- squareLength truncates a text title.
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let url = Bundle.module.url(forResource: "icon", withExtension: "svg"),
@@ -109,6 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         DispatchQueue.global(qos: .utility).async {
             let (projects, error) = self.fetchProjects()
             DispatchQueue.main.async {
+                self.notifyIfBroken(old: self.projects, new: projects)
                 self.projects = projects
                 self.fetchError = error
                 self.loaded = true
@@ -117,6 +128,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.statusItem.button?.title = runningCount > 0 ? " \(runningCount)" : ""
             }
         }
+    }
+
+    // Posts a notification for each project that went from running to a problem
+    // state (unhealthy, dir missing, config missing) between two polls. A stop
+    // is the user's own doing, so it stays silent.
+    func notifyIfBroken(old: [DDEVProject], new: [DDEVProject]) {
+        guard canNotify else { return }
+        let wasRunning = Set(old.filter { statusKind($0.status) == .running }.map(\.name))
+        for p in new where wasRunning.contains(p.name) && statusKind(p.status) == .problem {
+            let content = UNMutableNotificationContent()
+            content.title = "\(p.name) is \(p.status)"
+            content.sound = .default
+            let request = UNNotificationRequest(identifier: p.name, content: content, trigger: nil)
+            UNUserNotificationCenter.current().add(request)
+        }
+    }
+
+    // Without this the banner is suppressed whenever ddevDock counts as the
+    // frontmost app (e.g. right after an alert).
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound])
     }
 
     // Rebuilds the menu from the cache every time it is opened, and kicks a

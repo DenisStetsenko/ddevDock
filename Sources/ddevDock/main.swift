@@ -303,7 +303,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     }
 
     // A colored dot followed by the project name in the normal menu text color.
-    func projectTitle(_ p: DDEVProject) -> NSAttributedString {
+    // A disabled item does not dim an attributed title by itself, so the busy
+    // variant passes the disabled text color explicitly.
+    func projectTitle(_ p: DDEVProject, suffix: String = "", textColor: NSColor = .labelColor) -> NSAttributedString {
         let title = NSMutableAttributedString()
 
         let dot = NSAttributedString(
@@ -313,8 +315,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         title.append(dot)
 
         let name = NSAttributedString(
-            string: p.name,
-            attributes: [.foregroundColor: NSColor.labelColor]
+            string: p.name + suffix,
+            attributes: [.foregroundColor: textColor]
         )
         title.append(name)
 
@@ -327,8 +329,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         item.isEnabled = true
 
         if let verb = busy[p.name] ?? busy["*"] {
-            item.title = "\(p.name) \u{2014} \(verb)\u{2026}"
-            item.attributedTitle = nil
+            item.attributedTitle = projectTitle(p, suffix: " \u{2014} \(verb)\u{2026}", textColor: .disabledControlTextColor)
             item.isEnabled = false
             return item
         }

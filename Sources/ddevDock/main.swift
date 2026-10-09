@@ -371,7 +371,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         let finderItem = NSMenuItem(title: "Open in Finder", action: #selector(revealInFinder(_:)), keyEquivalent: "")
         finderItem.representedObject = p
         finderItem.target = self
-        finderItem.isEnabled = !p.approot.isEmpty
+        finderItem.isEnabled = FileManager.default.fileExists(atPath: p.approot) // "dir missing" would open nothing
         submenu.addItem(finderItem)
 
         submenu.addItem(NSMenuItem.separator())

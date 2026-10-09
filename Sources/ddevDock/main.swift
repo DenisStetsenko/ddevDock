@@ -453,7 +453,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         archived = a
     }
 
+    // One stray click here stops every container, so confirm first.
     @objc func stopAll() {
+        let alert = NSAlert()
+        alert.messageText = "Stop all DDEV projects?"
+        alert.informativeText = "Runs ddev poweroff. Anything in progress inside the containers is interrupted."
+        alert.addButton(withTitle: "Stop All")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate()
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
         runDDEVAsync(["poweroff"], busyKey: "*", verb: "Stopping all")
     }
 

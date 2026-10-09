@@ -495,6 +495,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
                 ["/System/Applications/Utilities", "/Applications"]
                     .contains { FileManager.default.fileExists(atPath: "\($0)/\(name).app") }
             }
+            // A stored choice that is no longer installed would leave the popup blank.
+            if !terminals.contains(terminalAppName) { UserDefaults.standard.set("Terminal", forKey: "terminalApp") }
             let terminalPopup = NSPopUpButton()
             terminalPopup.addItems(withTitles: terminals)
             terminalPopup.widthAnchor.constraint(equalToConstant: 180).isActive = true

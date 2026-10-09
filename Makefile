@@ -11,12 +11,14 @@ app: $(BUNDLE)
 $(BIN): Sources/$(APP)/*.swift Package.swift
 	swift build -c release
 
-$(BUNDLE): $(BIN) Info.plist AppIcon.icns
+ICON     = Sources/$(APP)/Resources/AppIcon.icns
+
+$(BUNDLE): $(BIN) Info.plist $(ICON)
 	rm -rf $(BUNDLE)
 	mkdir -p $(CONTENTS)/MacOS $(CONTENTS)/Resources
 	cp $(BIN) $(CONTENTS)/MacOS/
 	cp -R $(RES) $(CONTENTS)/Resources/
-	cp AppIcon.icns $(CONTENTS)/Resources/
+	cp $(ICON) $(CONTENTS)/Resources/
 	cp Info.plist $(CONTENTS)/
 	codesign --force --deep --sign - $(BUNDLE)
 

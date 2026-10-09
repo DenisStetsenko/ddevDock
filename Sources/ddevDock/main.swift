@@ -425,10 +425,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } catch {
             return ([], "ddev not found (check PATH)")
         }
+        // Docker hung after sleep makes `ddev list` never return; without this the
+        // `refreshing` flag stays set and the timer skips every tick forever.
+        DispatchQueue.global().asyncAfter(deadline: .now() + 30) {
+            if task.isRunning { task.terminate() }
+        }
         // Read before waiting -- the reverse order deadlocks on large output.
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         task.waitUntilExit()
 
+        if task.terminationReason == .uncaughtSignal {
+            return ([], "ddev list timed out (30 s)")
+        }
         if task.terminationStatus == 127 {
             return ([], "ddev not found (check PATH)")
         }

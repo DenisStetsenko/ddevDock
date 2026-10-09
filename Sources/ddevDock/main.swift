@@ -57,6 +57,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         set { UserDefaults.standard.set(Array(newValue), forKey: favoritesKey) }
     }
 
+    // Archived projects move out of the main list into an "Archived" submenu.
+    var archived: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: "ddevArchived") ?? []) }
+        set { UserDefaults.standard.set(Array(newValue), forKey: "ddevArchived") }
+    }
+
     // UNUserNotificationCenter needs a bundle identifier; from `swift run` there is
     // none and the first call crashes.
     var canNotify: Bool { Bundle.main.bundleIdentifier != nil }
@@ -205,18 +211,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             menu.addItem(item)
         } else {
             let favorites = self.favorites // one UserDefaults read per menu open
+            let archived = self.archived
             let favs = projects.filter { favorites.contains($0.name) }
-            let others = projects.filter { !favorites.contains($0.name) }
+            let others = projects.filter { !favorites.contains($0.name) && !archived.contains($0.name) }
+            let archive = projects.filter { archived.contains($0.name) }
 
             if !favs.isEmpty {
                 let header = NSMenuItem(title: "Favorites", action: nil, keyEquivalent: "")
                 header.isEnabled = false
                 menu.addItem(header)
-                for p in favs { menu.addItem(buildProjectItem(p, isFavorite: true)) }
+                for p in favs { menu.addItem(buildProjectItem(p, isFavorite: true, isArchived: false)) }
                 menu.addItem(NSMenuItem.separator())
             }
 
-            for p in others { menu.addItem(buildProjectItem(p, isFavorite: false)) }
+            for p in others { menu.addItem(buildProjectItem(p, isFavorite: false, isArchived: false)) }
+
+            if !archive.isEmpty {
+                menu.addItem(NSMenuItem.separator())
+                let archiveItem = NSMenuItem(title: "Archived", action: nil, keyEquivalent: "")
+                let archiveMenu = NSMenu()
+                archiveMenu.autoenablesItems = false
+                for p in archive { archiveMenu.addItem(buildProjectItem(p, isFavorite: false, isArchived: true)) }
+                archiveItem.submenu = archiveMenu
+                menu.addItem(archiveItem)
+            }
         }
 
         menu.addItem(NSMenuItem.separator())
@@ -297,7 +315,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         return title
     }
 
-    func buildProjectItem(_ p: DDEVProject, isFavorite isFav: Bool) -> NSMenuItem {
+    func buildProjectItem(_ p: DDEVProject, isFavorite isFav: Bool, isArchived: Bool) -> NSMenuItem {
         let item = NSMenuItem(title: p.name, action: nil, keyEquivalent: "")
         item.attributedTitle = projectTitle(p)
         item.isEnabled = true
@@ -362,6 +380,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         favItem.isEnabled = true
         submenu.addItem(favItem)
 
+        let archiveItem = NSMenuItem(
+            title: isArchived ? "Unarchive" : "Archive",
+            action: #selector(toggleArchived(_:)),
+            keyEquivalent: ""
+        )
+        archiveItem.representedObject = p
+        archiveItem.target = self
+        archiveItem.isEnabled = true
+        submenu.addItem(archiveItem)
+
         item.submenu = submenu
         return item
     }
@@ -407,8 +435,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     @objc func toggleFavorite(_ sender: NSMenuItem) {
         guard let p = sender.representedObject as? DDEVProject else { return }
         var f = favorites
-        if f.contains(p.name) { f.remove(p.name) } else { f.insert(p.name) }
+        if f.contains(p.name) { f.remove(p.name) } else { f.insert(p.name); archived.remove(p.name) }
         favorites = f
+    }
+
+    // Archiving also drops the project from Favorites; the two lists are exclusive.
+    @objc func toggleArchived(_ sender: NSMenuItem) {
+        guard let p = sender.representedObject as? DDEVProject else { return }
+        var a = archived
+        if a.contains(p.name) { a.remove(p.name) } else { a.insert(p.name); favorites.remove(p.name) }
+        archived = a
     }
 
     @objc func stopAll() {

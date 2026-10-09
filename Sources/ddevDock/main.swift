@@ -158,11 +158,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
     // Posts a notification for each project that went from running to a problem
     // state (unhealthy, dir missing, config missing) between two polls. A stop
-    // is the user's own doing, so it stays silent.
+    // is the user's own doing, so it stays silent. So is a project with a
+    // command in flight: `ddev restart` passes through "unhealthy" until the
+    // healthcheck succeeds, and a poll can land in that window.
     func notifyIfBroken(old: [DDEVProject], new: [DDEVProject]) {
-        guard canNotify else { return }
+        guard canNotify, busy["*"] == nil else { return }
         let wasRunning = Set(old.filter { statusKind($0.status) == .running }.map(\.name))
-        for p in new where wasRunning.contains(p.name) && statusKind(p.status) == .problem {
+        for p in new where wasRunning.contains(p.name) && statusKind(p.status) == .problem && busy[p.name] == nil {
             let content = UNMutableNotificationContent()
             content.title = "\(p.name) is \(p.status)"
             content.sound = .default

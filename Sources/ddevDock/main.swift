@@ -150,6 +150,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         toggleItem.isEnabled = true
         submenu.addItem(toggleItem)
 
+        let restartItem = NSMenuItem(title: "Restart", action: #selector(restartProject(_:)), keyEquivalent: "")
+        restartItem.representedObject = p
+        restartItem.target = self
+        restartItem.isEnabled = running
+        submenu.addItem(restartItem)
+
         let sshItem = NSMenuItem(title: "SSH", action: #selector(sshProject(_:)), keyEquivalent: "")
         sshItem.representedObject = p
         sshItem.target = self
@@ -167,6 +173,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         mailpitItem.target = self
         mailpitItem.isEnabled = running && p.mailpitURL != nil
         submenu.addItem(mailpitItem)
+
+        let finderItem = NSMenuItem(title: "Reveal in Finder", action: #selector(revealInFinder(_:)), keyEquivalent: "")
+        finderItem.representedObject = p
+        finderItem.target = self
+        finderItem.isEnabled = !p.approot.isEmpty
+        submenu.addItem(finderItem)
 
         submenu.addItem(NSMenuItem.separator())
 
@@ -191,6 +203,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let p = sender.representedObject as? DDEVProject else { return }
         let cmd = statusKind(p.status) == .running ? "stop" : "start"
         runDDEVAsync([cmd, p.name])
+    }
+
+    @objc func restartProject(_ sender: NSMenuItem) {
+        guard let p = sender.representedObject as? DDEVProject else { return }
+        runDDEVAsync(["restart", p.name])
+    }
+
+    @objc func revealInFinder(_ sender: NSMenuItem) {
+        guard let p = sender.representedObject as? DDEVProject, !p.approot.isEmpty else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: p.approot)])
     }
 
     // `-s` is the SERVICE flag (web/db), not the project. The project is a

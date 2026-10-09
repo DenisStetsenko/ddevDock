@@ -63,15 +63,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         menu.removeAllItems()
 
-        let projects = fetchProjects()
+        let (projects, error) = fetchProjects()
 
         // Running count next to the icon. Refreshes only when the menu opens
         // until background polling lands.
         let runningCount = projects.filter { statusKind($0.status) == .running }.count
         statusItem.button?.title = runningCount > 0 ? " \(runningCount)" : ""
 
-        if projects.isEmpty {
-            let item = NSMenuItem(title: "No projects found (check PATH / ddev install)", action: nil, keyEquivalent: "")
+        if let error = error {
+            let item = NSMenuItem(title: error, action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            menu.addItem(item)
+        } else if projects.isEmpty {
+            let item = NSMenuItem(title: "No projects", action: nil, keyEquivalent: "")
             item.isEnabled = false
             menu.addItem(item)
         } else {
@@ -321,7 +325,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     // Synchronous on purpose: menuWillOpen needs the result before the menu displays.
-    func fetchProjects() -> [DDEVProject] {
+    // Returns projects, or an error line for the menu. With -j, ddev reports
+    // failures (e.g. Docker not running) as {"level":"fatal","msg":...} on
+    // stdout with a non-zero exit; a missing binary makes env exit 127.
+    func fetchProjects() -> ([DDEVProject], String?) {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         task.arguments = ["ddev", "list", "-j"]
@@ -335,12 +342,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do {
             try task.run()
         } catch {
-            return []
+            return ([], "ddev not found (check PATH)")
         }
         // Read before waiting -- the reverse order deadlocks on large output.
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         task.waitUntilExit()
-        return parseProjects(from: data)
+
+        if task.terminationStatus == 127 {
+            return ([], "ddev not found (check PATH)")
+        }
+        if task.terminationStatus != 0 {
+            let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["msg"] as? String
+            let firstLine = msg?.split(separator: "\n").first.map(String.init)
+            return ([], firstLine ?? "ddev list failed (exit \(task.terminationStatus))")
+        }
+        return (parseProjects(from: data), nil)
     }
 
     // NOT verified against a live `ddev list -j`. Handles the shapes seen across

@@ -62,6 +62,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     var canNotify: Bool { Bundle.main.bundleIdentifier != nil }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Registered defaults show up in the Settings fields; nothing is written to disk.
+        UserDefaults.standard.register(defaults: ["refreshInterval": 30, "terminalApp": "Terminal"])
+
         if canNotify {
             UNUserNotificationCenter.current().delegate = self
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }

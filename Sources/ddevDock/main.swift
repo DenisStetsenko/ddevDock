@@ -71,7 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let url = Bundle.module.url(forResource: "icon", withExtension: "svg"),
            let icon = NSImage(contentsOf: url) {
-            icon.size = NSSize(width: 18, height: 18)
+            icon.size = NSSize(width: 16, height: 16)
             icon.isTemplate = true // follows menu bar light/dark appearance
             statusItem.button?.image = icon
             statusItem.button?.imagePosition = .imageLeading

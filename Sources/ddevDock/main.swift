@@ -108,10 +108,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
     func startTimer() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
+        timer = Timer(timeInterval: refreshInterval, repeats: true) { [weak self] _ in
             self?.refresh()
         }
         timer?.tolerance = refreshInterval / 3 // lets the system coalesce wake-ups
+        // .common, not .default: a scheduledTimer never fires while a menu is
+        // open (event-tracking mode), which is exactly when the live rebuild matters.
+        RunLoop.main.add(timer!, forMode: .common)
     }
 
     // Runs `ddev list -j` off the main thread and stores the result.

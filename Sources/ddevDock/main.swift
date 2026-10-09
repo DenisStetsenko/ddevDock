@@ -94,17 +94,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         // container does not trigger a false "unhealthy" notification.
         let center = NSWorkspace.shared.notificationCenter
         center.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.screenAsleep = true
             self?.timer?.invalidate()
         }
         center.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.screenAsleep = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                self?.refresh()
-                self?.startTimer()
+                guard let self, !self.screenAsleep else { return } // went dark again meanwhile
+                self.refresh()
+                self.startTimer()
             }
         }
     }
 
     var timer: Timer?
+    var screenAsleep = false
 
     func startTimer() {
         timer?.invalidate()

@@ -323,6 +323,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         return title
     }
 
+    // SF Symbol for a submenu item; the menu sizes and tints it.
+    func symbol(_ name: String) -> NSImage? {
+        NSImage(systemSymbolName: name, accessibilityDescription: nil)
+    }
+
     func buildProjectItem(_ p: DDEVProject, isFavorite isFav: Bool, isArchived: Bool) -> NSMenuItem {
         let item = NSMenuItem(title: p.name, action: nil, keyEquivalent: "")
         item.attributedTitle = projectTitle(p)
@@ -340,36 +345,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         let running = statusKind(p.status) == .running
         let toggleTitle = running ? "Stop" : "Start"
         let toggleItem = NSMenuItem(title: toggleTitle, action: #selector(toggleProject(_:)), keyEquivalent: "")
+        toggleItem.image = symbol(running ? "stop.fill" : "play.fill")
         toggleItem.representedObject = p
         toggleItem.target = self
         toggleItem.isEnabled = true
         submenu.addItem(toggleItem)
 
         let restartItem = NSMenuItem(title: "Restart", action: #selector(restartProject(_:)), keyEquivalent: "")
+        restartItem.image = symbol("arrow.clockwise")
         restartItem.representedObject = p
         restartItem.target = self
         restartItem.isEnabled = running
         submenu.addItem(restartItem)
 
         let sshItem = NSMenuItem(title: "SSH", action: #selector(sshProject(_:)), keyEquivalent: "")
+        sshItem.image = symbol("terminal")
         sshItem.representedObject = p
         sshItem.target = self
         sshItem.isEnabled = running
         submenu.addItem(sshItem)
 
         let urlItem = NSMenuItem(title: "Open URL", action: #selector(openProjectURL(_:)), keyEquivalent: "")
+        urlItem.image = symbol("safari")
         urlItem.representedObject = p
         urlItem.target = self
         urlItem.isEnabled = running && p.primaryURL != nil
         submenu.addItem(urlItem)
 
         let mailpitItem = NSMenuItem(title: "Mailpit", action: #selector(openMailpit(_:)), keyEquivalent: "")
+        mailpitItem.image = symbol("envelope")
         mailpitItem.representedObject = p
         mailpitItem.target = self
         mailpitItem.isEnabled = running && p.mailpitURL != nil
         submenu.addItem(mailpitItem)
 
         let finderItem = NSMenuItem(title: "Open in Finder", action: #selector(revealInFinder(_:)), keyEquivalent: "")
+        finderItem.image = symbol("folder")
         finderItem.representedObject = p
         finderItem.target = self
         finderItem.isEnabled = FileManager.default.fileExists(atPath: p.approot) // "dir missing" would open nothing
@@ -382,6 +393,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             action: #selector(toggleFavorite(_:)),
             keyEquivalent: ""
         )
+        favItem.image = symbol(isFav ? "star.slash" : "star")
         favItem.representedObject = p
         favItem.target = self
         favItem.isEnabled = true
@@ -392,6 +404,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             action: #selector(toggleArchived(_:)),
             keyEquivalent: ""
         )
+        archiveItem.image = symbol(isArchived ? "tray.and.arrow.up" : "archivebox")
         archiveItem.representedObject = p
         archiveItem.target = self
         archiveItem.isEnabled = true

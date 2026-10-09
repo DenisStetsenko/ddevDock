@@ -8,7 +8,7 @@ CONTENTS = $(BUNDLE)/Contents
 
 app: $(BUNDLE)
 
-$(BIN): Sources/$(APP)/*.swift Package.swift
+$(BIN): Sources/$(APP)/*.swift Sources/$(APP)/Resources/icon.svg Package.swift
 	swift build -c release
 
 ICON     = Sources/$(APP)/Resources/AppIcon.icns

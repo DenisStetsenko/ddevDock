@@ -36,17 +36,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     var refreshing = false
     // `ddev list -j` costs ~1.3 s wall / 0.7 s CPU with 20 projects, so the
     // timer only keeps the menu bar count fresh; opening the menu and running
-    // a command refresh immediately anyway.
-    let refreshInterval: TimeInterval = 30
+    // a command refresh immediately anyway. Set in Settings…; 5 s floor.
+    var refreshInterval: TimeInterval {
+        let v = UserDefaults.standard.double(forKey: "refreshInterval")
+        return v > 0 ? max(5, v) : 30
+    }
 
     // PATH fix: GUI apps on macOS do not inherit the shell's PATH.
     // Adjust if your ddev binary lives elsewhere (`which ddev` in Terminal to check).
     let extraPathDirs = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
 
-    // Override: `defaults write com.denstetsenko.ddevDock terminalApp iTerm`
-    // (domain is `ddevDock` when run via `swift run` instead of the .app)
+    // Set in Settings…; must be an app with a `do script` AppleScript command.
     var terminalAppName: String {
-        UserDefaults.standard.string(forKey: "terminalApp") ?? "Terminal"
+        let v = UserDefaults.standard.string(forKey: "terminalApp") ?? ""
+        return v.isEmpty ? "Terminal" : v
     }
 
     var favorites: Set<String> {
@@ -208,6 +211,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         loginItem.target = self
         loginItem.state = loginStatus == .enabled ? .on : .off
         menu.addItem(loginItem)
+
+        let settingsItem = NSMenuItem(title: "Settings\u{2026}", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
 
         let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
@@ -395,6 +402,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
     @objc func quit() {
         NSApp.terminate(nil)
+    }
+
+    // MARK: - Settings
+
+    var settingsWindow: NSWindow?
+
+    // Two fields bound straight to UserDefaults through NSUserDefaultsController:
+    // no save button, a value is stored when the field loses focus or on Return.
+    @objc func openSettings() {
+        if settingsWindow == nil {
+            func field(_ key: String, placeholder: String) -> NSTextField {
+                let f = NSTextField()
+                f.placeholderString = placeholder
+                f.widthAnchor.constraint(equalToConstant: 180).isActive = true
+                f.bind(.value, to: NSUserDefaultsController.shared, withKeyPath: "values.\(key)")
+                return f
+            }
+            let grid = NSGridView(views: [
+                [NSTextField(labelWithString: "Terminal app:"), field("terminalApp", placeholder: "Terminal")],
+                [NSTextField(labelWithString: "Refresh every (s):"), field("refreshInterval", placeholder: "30")],
+            ])
+            grid.column(at: 0).xPlacement = .trailing
+            grid.rowSpacing = 8
+            grid.translatesAutoresizingMaskIntoConstraints = false
+
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 360, height: 100),
+                                  styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            window.title = "ddevDock Settings"
+            window.isReleasedWhenClosed = false
+            window.contentView!.addSubview(grid)
+            NSLayoutConstraint.activate([
+                grid.topAnchor.constraint(equalTo: window.contentView!.topAnchor, constant: 20),
+                grid.leadingAnchor.constraint(equalTo: window.contentView!.leadingAnchor, constant: 20),
+                grid.trailingAnchor.constraint(equalTo: window.contentView!.trailingAnchor, constant: -20),
+                grid.bottomAnchor.constraint(equalTo: window.contentView!.bottomAnchor, constant: -20),
+            ])
+            window.center()
+            settingsWindow = window
+
+            // Restart the timer when the interval changes; favorites toggles also
+            // land here, a spare restart costs nothing.
+            NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+                self?.startTimer()
+            }
+        }
+        NSApp.activate()
+        settingsWindow?.makeKeyAndOrderFront(nil)
     }
 
     // MARK: - Escaping helpers

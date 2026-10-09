@@ -34,6 +34,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     var fetchError: String?
     var loaded = false
     var refreshing = false
+    // A refresh requested while one is in flight (e.g. a command finished mid-poll)
+    // would otherwise be dropped, and that poll's result may predate the command.
+    var refreshAgain = false
     // `ddev list -j` costs ~1.3 s wall / 0.7 s CPU with 20 projects, so the
     // timer only keeps the menu bar count fresh; opening the menu and running
     // a command refresh immediately anyway. Set in Settings…; 5 s floor.
@@ -131,9 +134,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     }
 
     // Runs `ddev list -j` off the main thread and stores the result.
-    // Skips if a fetch is already in flight.
+    // If a fetch is already in flight, runs once more after it finishes.
     func refresh() {
-        guard !refreshing else { return }
+        guard !refreshing else { refreshAgain = true; return }
         refreshing = true
         DispatchQueue.global(qos: .utility).async {
             let (projects, error) = self.fetchProjects()
@@ -148,6 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
                 let runningCount = projects.filter { self.statusKind($0.status) == .running }.count
                 self.statusItem.button?.title = runningCount > 0 ? " \(runningCount)" : ""
                 if changed && self.menuIsOpen { self.rebuildMenu() }
+                if self.refreshAgain { self.refreshAgain = false; self.refresh() }
             }
         }
     }

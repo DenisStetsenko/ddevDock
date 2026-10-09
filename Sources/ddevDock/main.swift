@@ -27,8 +27,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // Adjust if your ddev binary lives elsewhere (`which ddev` in Terminal to check).
     let extraPathDirs = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
 
-    // Change if you use iTerm2 / Ghostty / another terminal.
-    let terminalAppName = "Terminal"
+    // Override: `defaults write ddevDock terminalApp iTerm`
+    var terminalAppName: String {
+        UserDefaults.standard.string(forKey: "terminalApp") ?? "Terminal"
+    }
 
     var favorites: Set<String> {
         get { Set(UserDefaults.standard.stringArray(forKey: favoritesKey) ?? []) }

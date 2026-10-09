@@ -7,7 +7,8 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "ddevDock",
-            path: "Sources/ddevDock"
+            path: "Sources/ddevDock",
+            resources: [.copy("Resources/icon.svg")]
         )
     ]
 )

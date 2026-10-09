@@ -40,7 +40,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // FIX 4: variableLength, not squareLength -- squareLength truncates a text title.
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.title = "DDEV"
+        if let url = Bundle.module.url(forResource: "icon", withExtension: "svg"),
+           let icon = NSImage(contentsOf: url) {
+            icon.size = NSSize(width: 18, height: 18)
+            icon.isTemplate = true // follows menu bar light/dark appearance
+            statusItem.button?.image = icon
+            statusItem.button?.imagePosition = .imageLeading
+        } else {
+            statusItem.button?.title = "DDEV"
+        }
 
         let menu = NSMenu()
         menu.delegate = self
@@ -56,6 +64,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.removeAllItems()
 
         let projects = fetchProjects()
+
+        // Running count next to the icon. Refreshes only when the menu opens
+        // until background polling lands.
+        let runningCount = projects.filter { statusKind($0.status) == .running }.count
+        statusItem.button?.title = runningCount > 0 ? " \(runningCount)" : ""
 
         if projects.isEmpty {
             let item = NSMenuItem(title: "No projects found (check PATH / ddev install)", action: nil, keyEquivalent: "")

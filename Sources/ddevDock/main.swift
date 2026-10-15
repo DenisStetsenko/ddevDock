@@ -49,7 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     // Adjust if your ddev binary lives elsewhere (`which ddev` in Terminal to check).
     let extraPathDirs = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
 
-    // Set in Settings…; Terminal or iTerm, see openInTerminal().
+    // Set in Settings…; Terminal, iTerm or Ghostty, see openInTerminal().
     var terminalAppName: String {
         let v = UserDefaults.standard.string(forKey: "terminalApp") ?? ""
         return v.isEmpty ? "Terminal" : v
@@ -79,7 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         }
 
-        // FIX 4: variableLength, not squareLength -- squareLength truncates a text title.
+        // variableLength, not squareLength -- squareLength truncates a text title.
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let url = Bundle.module.url(forResource: "icon", withExtension: "svg"),
            let icon = NSImage(contentsOf: url) {
@@ -93,7 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
         let menu = NSMenu()
         menu.delegate = self
-        // FIX 2: AppKit overrides manual isEnabled while autoenablesItems is true.
+        // AppKit overrides manual isEnabled while autoenablesItems is true.
         menu.autoenablesItems = false
         statusItem.menu = menu
 
@@ -199,8 +199,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
     func rebuildMenu() {
         guard let menu = statusItem.menu else { return }
-        // Replacing items collapses an open submenu, so this is only called when
-        // something actually changed.
+        // Replacing items collapses an open submenu, so this is only called when something actually changed.
         menu.removeAllItems()
 
         if let error = fetchError {
@@ -244,14 +243,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             }
         }
 
-        menu.addItem(NSMenuItem.separator())
+        // With ddev list failing (Docker down, ddev missing) poweroff has nothing to stop.
+        if fetchError == nil {
+            menu.addItem(NSMenuItem.separator())
 
-        // FIX 3: explicit target, not responder-chain dispatch.
-        let stopAllItem = NSMenuItem(title: busy["*"] == nil ? "Stop All" : "Stopping all\u{2026}",
-                                     action: #selector(stopAll), keyEquivalent: "")
-        stopAllItem.target = self
-        stopAllItem.isEnabled = busy["*"] == nil
-        menu.addItem(stopAllItem)
+            // Explicit target, not responder-chain dispatch.
+            let stopAllItem = NSMenuItem(title: busy["*"] == nil ? "Stop All" : "Stopping all\u{2026}",
+                                         action: #selector(stopAll), keyEquivalent: "")
+            stopAllItem.image = symbol("power")
+            stopAllItem.target = self
+            // Unhealthy projects still run their containers; paused ones keep them until poweroff removes them.
+            stopAllItem.isEnabled = busy["*"] == nil
+                && projects.contains { ["running", "unhealthy", "paused"].contains($0.status.lowercased()) }
+            menu.addItem(stopAllItem)
+        }
 
         menu.addItem(NSMenuItem.separator())
 
@@ -341,7 +346,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         }
 
         let submenu = NSMenu()
-        submenu.autoenablesItems = false // FIX 2, submenus need it too
+        submenu.autoenablesItems = false // as on the main menu, or AppKit overrides isEnabled
 
         let running = statusKind(p.status) == .running
         let toggleTitle = running ? "Stop" : "Start"
@@ -434,8 +439,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         NSWorkspace.shared.open(URL(fileURLWithPath: p.approot)) // opens the folder itself, not its parent
     }
 
-    // `-s` is the SERVICE flag (web/db), not the project. The project is a
-    // positional argument: `ddev ssh <projectname>`.
+    // `-s` is the SERVICE flag (web/db), not the project. The project is a positional argument: `ddev ssh <projectname>`.
     @objc func sshProject(_ sender: NSMenuItem) {
         guard let p = sender.representedObject as? DDEVProject else { return }
         openInTerminal(command: "ddev ssh \(shellQuote(p.name))")
@@ -514,7 +518,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
                 return f
             }
             // Only terminals openInTerminal() can script, and only if installed.
-            let terminals = ["Terminal", "iTerm"].filter { name in
+            let terminals = ["Terminal", "iTerm", "Ghostty"].filter { name in
                 ["/System/Applications/Utilities", "/Applications"]
                     .contains { FileManager.default.fileExists(atPath: "\($0)/\(name).app") }
             }
@@ -547,8 +551,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             window.center()
             settingsWindow = window
 
-            // Restart the timer when the interval changes; favorites toggles also
-            // land here, a spare restart costs nothing.
+            // Restart the timer when the interval changes; favorites toggles also land here, a spare restart costs nothing.
             NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
                 self?.startTimer()
             }
@@ -601,14 +604,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             task.standardError = pipe
             var output = ""
             var status: Int32 = 127
+            var timedOut = false
             do {
                 try task.run()
+                // Docker hung after sleep makes ddev never exit, leaving the project stuck in "Starting…".
+                // Generous: a first start pulls images.
+                DispatchQueue.global().asyncAfter(deadline: .now() + 600) {
+                    if task.isRunning { task.terminate() }
+                }
                 // Read before waiting; a swallowed run() failure here would leave
                 // the pipe open and this read blocked forever, with the project
                 // stuck in "Starting…".
                 output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
                 task.waitUntilExit()
                 status = task.terminationStatus
+                timedOut = task.terminationReason == .uncaughtSignal
             } catch {
                 output = error.localizedDescription
             }
@@ -620,7 +630,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
                 guard status != 0 else { return }
                 let alert = NSAlert()
                 alert.alertStyle = .warning
-                alert.messageText = "ddev \(args.joined(separator: " ")) failed (exit \(status))"
+                alert.messageText = timedOut
+                    ? "ddev \(args.joined(separator: " ")) timed out (10 min)"
+                    : "ddev \(args.joined(separator: " ")) failed (exit \(status))"
                 alert.informativeText = output.split(separator: "\n").suffix(15).joined(separator: "\n")
                 NSApp.activate()
                 alert.runModal()
@@ -633,19 +645,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         // NSWorkspace.launchApplication is deprecated since macOS 11.
         let appLiteral = appleScriptQuote(terminalAppName)
         let commandLiteral = appleScriptQuote(command)
-        // iTerm has its own dictionary: no `do script`, a window must be created first.
-        let script = terminalAppName == "iTerm" ? """
-        tell application \(appLiteral)
-            activate
-            create window with default profile
-            tell current session of current window to write text \(commandLiteral)
-        end tell
-        """ : """
-        tell application \(appLiteral)
-            activate
-            do script \(commandLiteral)
-        end tell
-        """
+        let script: String
+        switch terminalAppName {
+        case "iTerm":
+            // iTerm has its own dictionary: no `do script`, a window must be created first.
+            script = """
+            tell application \(appLiteral)
+                activate
+                create window with default profile
+                tell current session of current window to write text \(commandLiteral)
+            end tell
+            """
+        case "Ghostty":
+            // Ghostty 1.3+. `initial input` types into the user's shell like `do script`, so ddev is on its PATH.
+            script = """
+            tell application \(appLiteral)
+                activate
+                set cfg to new surface configuration
+                set initial input of cfg to \(commandLiteral) & linefeed
+                new window with configuration cfg
+            end tell
+            """
+        default:
+            script = """
+            tell application \(appLiteral)
+                activate
+                do script \(commandLiteral)
+            end tell
+            """
+        }
         // osascript blocks while the Automation permission dialog is up, and a
         // denied permission or missing app only shows up on stderr -- so run it
         // in the background and surface a non-zero exit.
@@ -673,7 +701,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     // Blocking; always called from refresh() on a background queue.
     // Returns projects, or an error line for the menu. With -j, ddev reports
     // failures (e.g. Docker not running) as {"level":"fatal","msg":...} on
-    // stdout with a non-zero exit; a missing binary makes env exit 127.
+    // stderr with a non-zero exit; a missing binary makes env exit 127.
     func fetchProjects() -> ([DDEVProject], String?) {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
@@ -682,16 +710,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
         let pipe = Pipe()
         task.standardOutput = pipe
-        // FIX 5: an unread Pipe deadlocks the process once its buffer fills.
-        task.standardError = FileHandle.nullDevice
+        // Same pipe: the fatal message is on stderr. A separate unread Pipe would deadlock the process once its buffer fills.
+        task.standardError = pipe
 
         do {
             try task.run()
         } catch {
             return ([], "ddev not found (check PATH)")
         }
-        // Docker hung after sleep makes `ddev list` never return; without this the
-        // `refreshing` flag stays set and the timer skips every tick forever.
+        // Docker hung after sleep makes `ddev list` never return; then `refreshing` stays set and the timer skips every tick.
         DispatchQueue.global().asyncAfter(deadline: .now() + 30) {
             if task.isRunning { task.terminate() }
         }
@@ -708,8 +735,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         let records = jsonLines(from: data)
         if task.terminationStatus != 0 {
             let msg = records.last { $0["level"] as? String == "fatal" || $0["level"] as? String == "error" }?["msg"] as? String
-            let firstLine = msg?.split(separator: "\n").first.map(String.init)
-            return ([], firstLine ?? "ddev list failed (exit \(task.terminationStatus))")
+            // "Docker error: failed to connect to the docker API at unix://…" is far too long for a menu item.
+            // Docker clients before 29 (older ddev) say "Cannot connect to the Docker daemon at …" instead.
+            if let msg, msg.contains("failed to connect to the docker API") || msg.contains("Cannot connect to the Docker daemon") {
+                return ([], "Docker is not running")
+            }
+            guard let firstLine = msg?.split(separator: "\n").first.map(String.init) else {
+                return ([], "ddev list failed (exit \(task.terminationStatus))")
+            }
+            return ([], firstLine.count > 60 ? String(firstLine.prefix(60)) + "\u{2026}" : firstLine)
         }
         return (parseProjects(from: records), nil)
     }

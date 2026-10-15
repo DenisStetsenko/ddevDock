@@ -11,7 +11,10 @@ Single Swift file, AppKit only, no dependencies. macOS 15 or later.
 
 ## Features
 
-- Project list with a colored status dot: green running, gray stopped, paused or starting, red unhealthy or misconfigured.
+- Project list with a colored status dot:
+  - 🟢 running
+  - ⚪ stopped, paused or starting
+  - 🔴 unhealthy or misconfigured
 - Running-project count next to the menu bar icon.
 - Per project: Start / Stop, Restart, Open URL, SSH (opens your terminal), Mailpit, Open in Finder, Favorites, Archive.
 - Favorites are pinned to the top; archived projects move into an `Archived` submenu so the main list stays short.
